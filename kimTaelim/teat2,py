@@ -1,0 +1,22 @@
+l = ['경기도', '강원도', '충청도', '전라도', '경상도']
+temperature = []
+
+y = 0
+
+for a in range (len(l)):
+    x = float(input())
+    temperature.append(x)
+    y += a
+z = y / len(l)
+print(z)
+
+c = 0
+
+for b in temperature:
+    if b > z:
+        c += 1
+print(c)
+
+        
+    
+
