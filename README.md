@@ -24,3 +24,11 @@ IT 희망학교 과제
 
 * PUSH 하기 전에 꼭 git pull 입력한 후 PUSH 해주세요!
 * Branch 관련 내용도 곧 추가할게요!
+
+---
+# Github Education
+1. Github Education 검색 후 들어가세요
+2. Join Github Education 누르고
+3. 학교 계정 추가 및 재학증명서 or 학생증 등록
+
+* Github Education 하면 Copilot 사용 가능합니다!
