@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<script src="http://code.jquery.com/jquery.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // * 로그인 업데이트
+        checkLogin()
+
+        // * Ranking 가져오기
+        getRanking()
+    })
+
+    function getRanking() {
+        try {
+            fetch(`http://localhost:8080/ranking`)
+            .then((response) => response.json())
+            .then((response) => {
+                console.log(response)
+                const rankers = response.ranker
+                if(rankers) {
+                    var rankText = ""
+                    rankers.forEach(function (ranker, rank) { 
+                        rankText += `${rank + 1} 등 : ${ranker.name} 님 (${ranker.point} 점)`
+                        rankText += "<br/>"})
+                    $("#rankers").html(rankText)
+                } else {
+                    $("#rankers").html('<font color="red">서버의 랭크 정보가 올바르지 않습니다!</font>')
+                }
+            })
+            .catch((reason) => {
+                $("#rankers").html('<font color="red">서버와의 통신에서 문제가 발생하였습니다</font>')
+            })
+        } catch (error) {
+            $("#rankers").html('<font color="red">서버에 요청을 보내는데 실패하였습니다</font>')
+        }
+    }
+
+    // * Modal 을 하나로 퉁쳐서 사용하고 있기 때문에, 상황에 따라 Modal 의 내용을 변경합니다.
+    function initModal(path) {
+        $("#login").prop("path", path)
+        if (path === "login") {
+            $("#loginLabel").html("로그인")
+            $("#buttonLoginModalLogin").html("로그인")
+        } else {
+            $("#loginLabel").html("회원가입")
+            $("#buttonLoginModalLogin").html("회원가입")
+        }
+    }
+
+    // * 로그인 여부를 체크합니다.
+    function checkLogin() {
+        const loginId = sessionStorage.getItem("loginId")
+        if(loginId) {
+            $("#buttonLogin").css("display", "none")
+            $("#buttonLogout").css("display", "")
+            $('#buttonRegister').css("display", "none")
+            $("#level").text(`${sessionStorage.getItem("loginId")} 님 (Lv. ${sessionStorage.getItem("level")},　Point : ${sessionStorage.getItem("point")})`)
+        } else {
+            $("#buttonLogin").css("display", "")
+            $("#buttonLogout").css("display", "none")
+            $('#buttonRegister').css("display", "")
+            $("#level").text("")
+        }
+    }
+
+    // * 서버와 통신하여 로그인을 처리합니다.
+    function loginOrRegister() {
+        var loginData = JSON.stringify({
+            id: $("#loginInputID").val(),
+            password: btoa($("#loginInputPW").val())
+        })
+
+        $("#loginProgress").css("display", "")
+        const stateToggleTags = ["loginInputID", "loginInputPW", "buttonLoginModalLogin", "buttonLoginModalClose"]
+        stateToggleTags.forEach(tag => $(`#${tag}`).prop('disabled', true))
+
+        const path = $("#login").prop("path")
+        try {
+            fetch(`http://localhost:8080/${path}`, {
+                method: 'POST',
+                body: loginData
+            })
+            .then((response) => response.json())
+            .then((response) => {
+                console.log(response)
+                const success = response.success
+                if(success) {
+                    sessionStorage.setItem('loginId', response.id)
+                    sessionStorage.setItem('level', response.level)
+                    sessionStorage.setItem('point', response.point)
+                    sessionStorage.setItem('rank', response.rank)
+
+                    checkLogin()
+                    $('#login').modal('hide')
+                } else {
+                    $("#loginMessage").html('<font color="red">ID/PW 가 올바르지 않습니다</font>')
+                }
+            })
+            .catch((reason) => {
+                $("#loginMessage").html('<font color="red">서버와의 통신에서 문제가 발생하였습니다</font>')
+            })
+            .finally(() => {
+                $("#loginProgress").css("display", "none")
+                stateToggleTags.forEach(tag => $(`#${tag}`).prop('disabled', false))
+            })
+        } catch (error) {
+            $("#loginMessage").html('<font color="red">서버에 요청을 보내는데 실패하였습니다</font>')
+            $("#loginProgress").css("display", "none")
+            stateToggleTags.forEach(tag => $(`#${tag}`).prop('disabled', false))
+        }
+    }
+
+    function logout() {
+        sessionStorage.clear()
+        checkLogin()
+    }
+	
+    function changeDice(player, computer) {
+        const player_dice = player ? player : Math.floor(Math.random()*6) + 1            
+        const computer_dice = computer ? computer : Math.floor(Math.random()*6) + 1
+        $("#gameboard_dice_player").attr("src", `./assets/img/dice-${player_dice}.png`)
+        $("#gameboard_dice_computer").attr("src", `./assets/img/dice-${computer_dice}.png`)
+    }
+    function randomDice() { changeDice(null, null) }
+
+    function sleep(ms) {
+        return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function playGame() {
+        const loginId = sessionStorage.getItem("loginId")
+        if(!loginId) {
+            $("#gameMessage").html('<font color="red">먼저 로그인해주세요!</font>')
+            return
+        }
+        
+        const animationEndTime = Date.now() + 600;
+
+        const interval = setInterval("randomDice()", 70)
+        try {
+            fetch(`http://localhost:8080/playgame?id=${loginId}`)
+            .then((response) => response.json())
+            .then((response) => {
+                console.log(response)
+
+                const result = response.result
+                const player = response.player
+                const computer = response.computer
+                const point = response.point
+                const level = response.level
+
+                sleep(animationEndTime - Date.now())
+                .then(() => {
+                    clearInterval(interval)
+                    changeDice(player, computer)
+
+                    if(result === "win") {
+                        sessionStorage.setItem('level', level)
+                        sessionStorage.setItem('point', point)
+                        checkLogin()
+                        $("#gameMessage").html('<font color="green">승리하셨습니다!</font>')
+                    } else if (result == "defeat") {
+                        $("#gameMessage").html('<font color="red">패배하셨습니다!</font>')
+                    } else if (result == "draw") {
+                        $("#gameMessage").html('<font color="white">비겼습니다!</font>')
+                    } else {
+                        $("#gameMessage").html('<font color="red">서버에서 올바른 값이 오지 않습니다!</font>')
+                    }
+                    getRanking()
+                })
+            })
+            .catch((reason) => {
+                changeDice(null, null)
+                clearInterval(interval)
+                $("#gameMessage").html('<font color="red">서버와의 통신에서 문제가 발생하였습니다</font>')
+            })
+        } catch (error) {
+            changeDice(null, null)
+            clearInterval(interval)
+            $("#gameMessage").html('<font color="red">서버에 요청을 보내는데 실패하였습니다</font>')
+        }
+    }
+</script>
+<style>
+    .btn-close {
+        display: none;
+    }
+</style>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title>주사위 게임 - IT 희망학교</title>
+        <!-- Favicon-->
+        <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+        <!-- Bootstrap Icons-->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
+        <!-- Google fonts-->
+        <link href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,700" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather:400,300,300italic,400italic,700,700italic" rel="stylesheet" type="text/css" />
+        <!-- SimpleLightbox plugin CSS-->
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.css" rel="stylesheet" />
+        <!-- Core theme CSS (includes Bootstrap)-->
+        <link href="css/styles.css" rel="stylesheet" />
+    </head>
+    <!-- Model Login -->
+    <div class="modal fade" id="login" tabindex="-1" aria-labelledby="loginLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="loginLabel">로그인</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form>
+                <div class="mb-3">
+                  <label for="loginInputID" class="form-label">아이디</label>
+                  <input type="email" class="form-control" id="loginInputID">
+                </div>
+                <div class="mb-3">
+                  <label for="loginInputPW" class="form-label">비밀번호</label>
+                  <input type="password" class="form-control" id="loginInputPW">
+                </div>
+              </form>
+              <div id="loginMessage"></div>
+              <div id="loginProgress" class="progress" style="display: none">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" id="buttonLoginModalLogin" class="btn btn-primary" onclick="loginOrRegister()">로그인</button>
+            <button type="button" id="buttonLoginModalClose" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <body id="page-top">
+        <!-- Navigation-->
+        <nav class="navbar navbar-expand-lg navbar-light fixed-top py-3" id="mainNav">
+            <div class="container px-4 px-lg-5">
+                <a class="navbar-brand" href="#page-top">주사위 게임</a>
+                <button class="navbar-toggler navbar-toggler-right" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+                <div class="collapse navbar-collapse" id="navbarResponsive">
+                    <ul class="navbar-nav ms-auto my-2 my-lg-0">
+                        <li class="nav-item"><span class="nav-link" id="level"></span>
+                        <li class="nav-item"><a class="nav-link" id="buttonLogin" style="display: none" data-bs-toggle="modal" data-bs-target="#login" onclick="initModal('login')">로그인</a></li>
+                        <li class="nav-item"><a class="nav-link" id="buttonLogout" style="display: none" onclick="logout()">로그아웃</a></li>
+                        <li class="nav-item"><a class="nav-link" id="buttonRegister" data-bs-toggle="modal" data-bs-target="#login" onclick="initModal('register')">회원가입</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        <!-- Masthead-->
+        <header class="masthead">
+            <div class="container px-4 px-lg-5 h-100">
+                <div class="row gx-4 gx-lg-5 h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-8 align-self-end text-white font-weight-bold">
+                        <div id="rankers" style="margin-top: 30px;">Top 3 랭커 정보가 수신되면 여기에 나타납니다</div>
+                        <div id="gameboard" style="background-color:aliceblue; padding: 10px">
+                            <div>
+                                <img id="gameboard_dice_player" src="assets/img/dice-1.png" style="width:300px;" />
+                                <div style="display: inline-block; width: 30px;">&nbsp;</div>
+                                <img id="gameboard_dice_computer" src="assets/img/dice-1.png" style="width:300px;" />
+                            </div>
+                            <div style="color: black">
+                                <div style="display: inline-block; width: 300px;">Player</div>
+                                <div style="display: inline-block; width: 30px;">&nbsp;</div>
+                                <div style="display: inline-block; width: 300px;">Computer</div>
+                            </div>
+                        </div>
+                        <div id="gameMessage" style="margin-top: 30px;">게임을 시작합시다!</div>
+                        <button id="game-buttonPlay" type="button" id="buttonplay" class="btn btn-primary" onclick="playGame()">게임 시작!</button>
+                    </div>
+                    <div class="col-lg-8 align-self-baseline" style="margin-top: 30px;">
+                        <p class="text-white-75 mb-5">게임에서 승리하면 10 점을 받으며, 100점을 받을때마다 레벨이 상승합니다.<br/>레벨이 상승하면 승률이 1% 상승하며, 최대 레벨은 25입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <!-- Bootstrap core JS-->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- SimpleLightbox plugin JS-->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/SimpleLightbox/2.1.0/simpleLightbox.min.js"></script>
+        <!-- Core theme JS-->
+        <script src="js/scripts.js"></script>
+    </body>
+</html>
